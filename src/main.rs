@@ -1,4 +1,4 @@
-use day_06::count_guard_path;
+use puzzle::count_guard_path;
 
 fn main() {
 
