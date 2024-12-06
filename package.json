@@ -1,7 +1,7 @@
 {
     "name": "day_06",
     "scripts": {
-        "test": "cargo test",
+        "test": "cargo test --workspace",
         "run": "cargo run"
     }
 }
