@@ -54,18 +54,18 @@ pub fn read_puzzle(input_path: &str) -> (Map, Guard) {
 }
 
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
 pub struct Point {
-    x: usize,
-    y: usize
+    pub x: usize,
+    pub y: usize
 }
 
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Map {
-    obstacles: Vec<Point>,
-    rows: usize,
-    columns: usize
+    pub obstacles: Vec<Point>,
+    pub rows: usize,
+    pub columns: usize
 }
 
 impl Map {
@@ -79,7 +79,7 @@ impl Map {
 }
 
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub enum Direction {
     UP,
     DOWN,
@@ -87,7 +87,7 @@ pub enum Direction {
     RIGHT
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Guard {
     position: Point,
     direction: Direction
@@ -104,26 +104,56 @@ impl Guard {
         }
     }
 
-    pub fn itinerary(&mut self, map: &Map) -> Vec<Point> {
-        let mut intinerary = Vec::new();
-        intinerary.push(Point {
-            x: self.position.x,
-            y: self.position.y
-        });
-        
+    pub fn itinerary(&mut self, map: &Map) -> Option<Vec<Point>> {
+        let mut itinerary = Vec::new();
+        let mut visited_states = std::collections::HashSet::new();
+    
+        let initial_state = (self.position, self.direction);
+        visited_states.insert(initial_state);
+    
+        itinerary.push(self.position);
+    
         loop {
-            if self.will_get_out_next_step(&map) {
-                break;
+            
+
+            if self.will_get_out_next_step(map) {
+                return Some(itinerary);
             }
-            self.check_direction_change(&map);
+    
+            self.check_direction_change(map);
+    
             self.next_move();
-            intinerary.push(Point {
-                x: self.position.x,
-                y: self.position.y
-            });
+    
+            let current_state = (self.position, self.direction);
+            if !visited_states.insert(current_state) {
+                return None; 
+            }
+    
+            itinerary.push(self.position);
+        }
+    }
+
+    pub fn find_all_blocking_obstructions(&self, map: &Map) -> Vec<Point> {
+        let mut possible_obstructions = Vec::new();
+
+        for y in 0..map.rows {
+            for x in 0..map.columns {
+                let obstruction = Point { x, y };
+
+                if map.obstacles.contains(&obstruction) {
+                    continue;
+                }
+
+                let mut new_map = map.clone();
+                new_map.obstacles.push(obstruction);
+
+                if self.clone().itinerary(&new_map).is_none() {
+                    possible_obstructions.push(obstruction);
+                }
+            }
         }
 
-        return intinerary;
+        possible_obstructions
     }
 
     fn will_get_out_next_step(&self, map: &Map) -> bool {
@@ -141,7 +171,7 @@ impl Guard {
             Direction::UP => self.position.y -= 1,
             Direction::RIGHT => self.position.x += 1,
             Direction::LEFT => self.position.x -= 1  
-        };
+        };     
     }
 
     fn check_direction_change(&mut self, map: &Map) {
@@ -184,6 +214,12 @@ mod tests {
     use super::*;
 
     #[test]
+    fn should_return_none_when_guard_blocked() {
+        let (map, mut guard) = read_puzzle("resources/puzzle_blocking.txt");
+        assert_eq!(guard.itinerary(&map), None);
+    }
+
+    #[test]
     fn should_have_itinerary_when_guard_get_out_with_one_obstacle_left_to_down_rotate() {
         let mut guard = Guard {
             position: Point {
@@ -192,7 +228,7 @@ mod tests {
             },
             direction: Direction::RIGHT
         };
-        let empty_map = Map {
+        let map = Map {
             obstacles: vec![Point {
                 x: 2,
                 y: 0
@@ -201,7 +237,11 @@ mod tests {
             columns: 3
         };
 
-        assert_eq!(guard.itinerary(&empty_map), vec![
+        assert_eq!(guard.itinerary(&map), Some(vec![
+            Point {
+                x: 0,
+                y: 0
+            },
             Point {
                 x: 1,
                 y: 0
@@ -214,7 +254,7 @@ mod tests {
                 x: 1,
                 y: 2
             }
-        ]);
+        ]));
     }
 
     #[test]
@@ -232,12 +272,16 @@ mod tests {
             columns: 2
         };
 
-        assert_eq!(guard.itinerary(&map), vec![
+        assert_eq!(guard.itinerary(&map), Some(vec![
+            Point {
+                x: 0,
+                y: 0
+            },
             Point {
                 x: 1,
                 y: 0
             }
-        ]);
+        ]));
     }
 
     #[test]
@@ -255,12 +299,16 @@ mod tests {
             columns: 2
         };
 
-        assert_eq!(guard.itinerary(&map), vec![
+        assert_eq!(guard.itinerary(&map), Some(vec![
+            Point {
+                x: 1,
+                y: 0
+            },
             Point {
                 x: 0,
                 y: 0
             }
-        ]);
+        ]));
     }
 
     #[test]
@@ -278,12 +326,16 @@ mod tests {
             columns: 2
         };
 
-        assert_eq!(guard.itinerary(&map), vec![
+        assert_eq!(guard.itinerary(&map), Some(vec![
+            Point {
+                x: 1,
+                y: 1
+            },
             Point {
                 x: 1,
                 y: 0
             }
-        ]);
+        ]));
     }
 
     #[test]
@@ -301,12 +353,16 @@ mod tests {
             columns: 2
         };
 
-        assert_eq!(guard.itinerary(&map), vec![
+        assert_eq!(guard.itinerary(&map), Some(vec![
+            Point {
+                x: 1,
+                y: 0
+            },
             Point {
                 x: 1,
                 y: 1
             }
-        ]);
+        ]));
     }
 
     #[test]
@@ -314,7 +370,10 @@ mod tests {
         let mut guard = Guard::new();
         let empty_map = Map::new();
 
-        assert_eq!(guard.itinerary(&empty_map), Vec::new());
+        assert_eq!(guard.itinerary(&empty_map), Some(vec![Point{
+            x: 0,
+            y:0
+        }]));
     }
 
     #[test]
