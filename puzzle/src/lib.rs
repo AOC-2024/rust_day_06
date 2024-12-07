@@ -17,7 +17,7 @@ pub fn count_guard_path(input_path: &str) -> usize {
 }
 
 pub fn count_guard_blocking_possibilities(input_path: &str) -> usize {
-    let (map, guard) = read_puzzle(input_path);
+    let (map, mut guard) = read_puzzle(input_path);
 
     return guard.find_all_blocking_obstructions(&map).len();
 }

@@ -1,4 +1,4 @@
-use std::fs::read_to_string;
+use std::{collections::HashSet, fs::read_to_string};
 
 
 pub fn read_puzzle(input_path: &str) -> (Map, Guard) {
@@ -87,7 +87,7 @@ pub enum Direction {
     RIGHT
 }
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub struct Guard {
     position: Point,
     direction: Direction
@@ -120,9 +120,10 @@ impl Guard {
                 return Some(itinerary);
             }
     
-            self.check_direction_change(map);
+            let new_direction = Guard::next_direction(&self, &map).unwrap_or_else(|| self.direction);
+            self.direction = new_direction;
     
-            self.next_move();
+            self.position = Guard::next_point(self.direction, self.position, self, &map);
     
             let current_state = (self.position, self.direction);
             if !visited_states.insert(current_state) {
@@ -133,26 +134,36 @@ impl Guard {
         }
     }
 
-    pub fn find_all_blocking_obstructions(&self, map: &Map) -> Vec<Point> {
-        let mut possible_obstructions = Vec::new();
+    pub fn find_all_blocking_obstructions(&mut self, map: &Map) -> HashSet<Point> {
+        let mut possible_obstructions = HashSet::new();
+        let initial_position = self.clone().position;
+        let initial_direction = self.clone().direction;
+        let initial_itinerary = self.itinerary(map);
 
-        for y in 0..map.rows {
-            for x in 0..map.columns {
-                let obstruction = Point { x, y };
+    
+        if initial_itinerary.is_none() {
+            return possible_obstructions;
+        }
+    
 
-                if map.obstacles.contains(&obstruction) {
-                    continue;
-                }
+        let unique_points: HashSet<_> = initial_itinerary.unwrap().into_iter().collect();
+    
+        for point in &unique_points {
+            let mut temp_map = map.clone();
+            // Add an obstacle at the current point in the itinerary
+            temp_map.obstacles.push(*point);
 
-                let mut new_map = map.clone();
-                new_map.obstacles.push(obstruction);
-
-                if self.clone().itinerary(&new_map).is_none() {
-                    possible_obstructions.push(obstruction);
-                }
+            let mut initial_guard = Guard {
+                position: initial_position,
+                direction: initial_direction
+            };
+    
+            // Check if placing this obstacle blocks the guard
+            if initial_guard.itinerary(&temp_map).is_none() {
+                possible_obstructions.insert(*point);
             }
         }
-
+    
         possible_obstructions
     }
 
@@ -165,46 +176,76 @@ impl Guard {
         }
     }
 
-    fn next_move(&mut self) {
-        match self.direction {
-            Direction::DOWN => self.position.y += 1,
-            Direction::UP => self.position.y -= 1,
-            Direction::RIGHT => self.position.x += 1,
-            Direction::LEFT => self.position.x -= 1  
-        };     
-    }
-
-    fn check_direction_change(&mut self, map: &Map) {
-        match self.direction {
+    fn next_point(direction: Direction, current_point: Point, guard: &Guard, map: &Map) -> Point {
+        let mut point = current_point.clone();
+        match direction {
             Direction::DOWN => {
-                if map.obstacles.iter().any(|obstacle| {
-                    obstacle.x == self.position.x && self.position.y + 1 == obstacle.y 
+                if !map.obstacles.iter().any(|obstacle| {
+                    obstacle.x == guard.position.x && guard.position.y + 1 == obstacle.y 
                 }).to_owned() {
-                    self.direction = Direction::LEFT
+                    point.y += 1
                 }
             },
             Direction::UP => {
-                if map.obstacles.iter().any(|obstacle| {
-                    obstacle.x == self.position.x && self.position.y - 1 == obstacle.y 
+                if !map.obstacles.iter().any(|obstacle| {
+                    obstacle.x == guard.position.x && guard.position.y - 1 == obstacle.y 
                 }).to_owned() {
-                    self.direction = Direction::RIGHT
+                    point.y -= 1
                 }
             },
             Direction::RIGHT => {
-                if map.obstacles.iter().any(|obstacle| {
-                    obstacle.x == self.position.x + 1 && self.position.y== obstacle.y 
+                if !map.obstacles.iter().any(|obstacle| {
+                    obstacle.x == guard.position.x + 1 && guard.position.y== obstacle.y 
                 }).to_owned() {
-                    self.direction = Direction::DOWN
+                    point.x += 1
                 }
             },
             Direction::LEFT => {
-                if map.obstacles.iter().any(|obstacle| {
-                    obstacle.x == self.position.x - 1 && self.position.y == obstacle.y 
+                if !map.obstacles.iter().any(|obstacle| {
+                    obstacle.x == guard.position.x - 1 && guard.position.y == obstacle.y 
                 }).to_owned() {
-                    self.direction = Direction::UP
+                    point.x -= 1
                 }
             }  
         };
+        point
+    }
+
+    fn next_direction(guard: &Guard, map: &Map) -> Option<Direction> {
+        match guard.direction {
+            Direction::DOWN => {
+                if map.obstacles.iter().any(|obstacle| {
+                    obstacle.x == guard.position.x && guard.position.y + 1 == obstacle.y 
+                }).to_owned() {
+                   return Some(Direction::LEFT)
+                }
+                None
+            },
+            Direction::UP => {
+                if map.obstacles.iter().any(|obstacle| {
+                    obstacle.x == guard.position.x && guard.position.y - 1 == obstacle.y 
+                }).to_owned() {
+                    return Some(Direction::RIGHT)
+                }
+                None
+            },
+            Direction::RIGHT => {
+                if map.obstacles.iter().any(|obstacle| {
+                    obstacle.x == guard.position.x + 1 && guard.position.y== obstacle.y 
+                }).to_owned() {
+                    return Some(Direction::DOWN)
+                }
+                None
+            },
+            Direction::LEFT => {
+                if map.obstacles.iter().any(|obstacle| {
+                    obstacle.x == guard.position.x - 1 && guard.position.y == obstacle.y 
+                }).to_owned() {
+                    return Some(Direction::UP)
+                }
+                None
+            }  
+        }
     }
 }
 
@@ -253,6 +294,46 @@ mod tests {
             Point {
                 x: 1,
                 y: 2
+            }
+        ]));
+    }
+
+    #[test]
+    fn should_have_itinerary_when_guard_have_to_turn_two_times() {
+        let mut guard = Guard {
+            position: Point {
+                x: 1,
+                y: 0
+            },
+            direction: Direction::RIGHT
+        };
+        let map = Map {
+            obstacles: vec![
+                Point {
+                    x: 2,
+                    y: 0
+                },
+                Point {
+                    x: 1,
+                    y: 1
+                }
+            ],
+            rows: 3,
+            columns: 3
+        };
+
+        assert_eq!(guard.itinerary(&map), Some(vec![
+            Point {
+                x: 1,
+                y: 0
+            },
+            Point {
+                x: 1,
+                y: 0
+            },
+            Point {
+                x: 0,
+                y: 0
             }
         ]));
     }

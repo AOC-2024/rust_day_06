@@ -7,6 +7,6 @@ fn main() {
     println!("Distinct guard path count: {guard_path_count}");
 
     let blocking_possibilities = count_guard_blocking_possibilities("src/resources/puzzle.txt");
-    //1840 too low
+    //1946
     println!("Blocking possibilities: {blocking_possibilities}");
 }
